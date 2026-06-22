@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Menu, Plus, LayoutDashboard, History } from "lucide-react";
-import { Budget, Expense, initialBudgets, initialExpenses } from "@/lib/data";
+import { Budget, Expense } from "@/lib/data";
 import { HomeView } from "@/components/HomeView";
 import { HistoryView } from "@/components/HistoryView";
 import { NewExpenseModal } from "@/components/NewExpenseModal";
@@ -11,8 +11,9 @@ import { SideDrawer } from "@/components/SideDrawer";
 import { Toast, ToastData } from "@/components/Toast";
 import { LoginView } from "@/components/LoginView";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { OnboardingModal } from "@/components/OnboardingModal";
 import { useNotifications } from "@/hooks/useNotifications";
-import { getSession, logout as authLogout } from "@/lib/auth";
+import { getSession, logout as authLogout, deleteAccount as authDeleteAccount } from "@/lib/auth";
 import type { User } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ type View = "home" | "history";
 
 const bKey = (uid: string) => `grana:budgets:${uid}`;
 const eKey = (uid: string) => `grana:expenses:${uid}`;
+const oKey = (uid: string) => `grana:onboarded:${uid}`;
 
 export default function App() {
   const [authLoaded, setAuthLoaded] = useState(false);
@@ -32,6 +34,8 @@ export default function App() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
   const { requestPermission, notifyBudgetAlert, permissionStatus } = useNotifications();
 
@@ -46,11 +50,15 @@ export default function App() {
     try {
       const b = localStorage.getItem(bKey(uid));
       const e = localStorage.getItem(eKey(uid));
-      setBudgets(b ? JSON.parse(b) : initialBudgets);
-      setExpenses(e ? JSON.parse(e) : initialExpenses);
+      setBudgets(b ? JSON.parse(b) : []);
+      setExpenses(e ? JSON.parse(e) : []);
+      // Auto-mark existing users (who already have data) as onboarded
+      if (b !== null && !localStorage.getItem(oKey(uid))) {
+        localStorage.setItem(oKey(uid), "1");
+      }
     } catch {
-      setBudgets(initialBudgets);
-      setExpenses(initialExpenses);
+      setBudgets([]);
+      setExpenses([]);
     }
   }
 
@@ -58,7 +66,9 @@ export default function App() {
     const session = getSession();
     if (session) {
       setUser(session);
+      const isOnboarded = localStorage.getItem(oKey(session.id)) === "1";
       loadUserData(session.id);
+      if (!isOnboarded) setOnboardingOpen(true);
     }
     setAuthLoaded(true);
   }, []);
@@ -89,7 +99,14 @@ export default function App() {
 
   function handleLogin(loggedUser: User) {
     setUser(loggedUser);
+    const isOnboarded = localStorage.getItem(oKey(loggedUser.id)) === "1";
     loadUserData(loggedUser.id);
+    if (!isOnboarded) setOnboardingOpen(true);
+  }
+
+  function handleCloseOnboarding() {
+    if (user) localStorage.setItem(oKey(user.id), "1");
+    setOnboardingOpen(false);
   }
 
   function handleLogout() {
@@ -98,6 +115,16 @@ export default function App() {
     setBudgets([]);
     setExpenses([]);
     setDrawerOpen(false);
+  }
+
+  function handleDeleteAccount() {
+    if (!user) return;
+    authDeleteAccount(user.id);
+    setUser(null);
+    setBudgets([]);
+    setExpenses([]);
+    setDrawerOpen(false);
+    setDeleteAccountOpen(false);
   }
 
   function handleAddExpense(expense: Omit<Expense, "id">) {
@@ -276,6 +303,7 @@ export default function App() {
           onNavigate={setView}
           user={user}
           onLogout={handleLogout}
+          onDeleteAccount={() => setDeleteAccountOpen(true)}
         />
 
         {/* Modals */}
@@ -305,6 +333,18 @@ export default function App() {
         />
 
         <Toast toast={toast} onDismiss={() => setToast(null)} />
+
+        <ConfirmModal
+          open={deleteAccountOpen}
+          onClose={() => setDeleteAccountOpen(false)}
+          onConfirm={handleDeleteAccount}
+          title="Excluir Conta"
+          message="Tem certeza que deseja excluir sua conta? Todos os seus dados, orçamentos e despesas serão apagados permanentemente."
+          confirmLabel="Excluir Conta"
+          danger
+        />
+
+        <OnboardingModal open={onboardingOpen} onClose={handleCloseOnboarding} />
       </div>
     </div>
   );

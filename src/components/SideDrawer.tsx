@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, PiggyBank, LayoutDashboard, History, ChevronRight, LogOut } from "lucide-react";
+import { X, PiggyBank, LayoutDashboard, History, ChevronRight, LogOut, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -18,6 +18,7 @@ interface SideDrawerProps {
   onNavigate: (view: "home" | "history") => void;
   user: User;
   onLogout: () => void;
+  onDeleteAccount: () => void;
 }
 
 const periodOptions: { value: BudgetPeriod; label: string }[] = [
@@ -43,6 +44,7 @@ export function SideDrawer({
   onNavigate,
   user,
   onLogout,
+  onDeleteAccount,
 }: SideDrawerProps) {
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -279,13 +281,22 @@ export function SideDrawer({
               <p className="text-sm font-semibold text-zinc-900 truncate">{user.name}</p>
               <p className="text-xs text-zinc-400 truncate">{user.email}</p>
             </div>
-            <button
-              onClick={onLogout}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-              title="Sair"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onDeleteAccount}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                title="Excluir conta"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={onLogout}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                title="Sair"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

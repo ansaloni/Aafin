@@ -70,6 +70,18 @@ export function logout() {
   localStorage.removeItem(SESSION_KEY);
 }
 
+export function deleteAccount(uid: string) {
+  const users = getUsers().filter((u) => u.id !== uid);
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  localStorage.removeItem(SESSION_KEY);
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.includes(`:${uid}`)) keysToRemove.push(key);
+  }
+  keysToRemove.forEach((k) => localStorage.removeItem(k));
+}
+
 export function getSession(): User | null {
   try {
     const s = localStorage.getItem(SESSION_KEY);
