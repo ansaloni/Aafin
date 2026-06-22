@@ -1,24 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { MoreVertical, Pencil } from "lucide-react";
 import { Budget } from "@/lib/data";
 import { formatCurrency, getProgressColor, getProgressTextColor } from "@/lib/utils";
+import { RefreshCw } from "lucide-react";
 
 interface BudgetCardProps {
   budget: Budget;
-  onEdit?: (budget: Budget) => void;
+  onClick?: () => void;
 }
 
-export function BudgetCard({ budget, onEdit }: BudgetCardProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
+export function BudgetCard({ budget, onClick }: BudgetCardProps) {
   const percent = Math.min((budget.spent / budget.limit) * 100, 100);
   const remaining = budget.limit - budget.spent;
   const progressColor = getProgressColor(percent);
   const textColor = getProgressTextColor(percent);
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm border border-zinc-100">
+    <div
+      className="bg-white rounded-2xl p-4 shadow-sm border border-zinc-100 cursor-pointer hover:shadow-md hover:border-zinc-200 transition-all active:scale-[0.99]"
+      onClick={onClick}
+    >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2.5">
           <span
@@ -26,41 +27,24 @@ export function BudgetCard({ budget, onEdit }: BudgetCardProps) {
             style={{ backgroundColor: budget.color }}
           />
           <div>
-            <h3 className="text-sm font-semibold text-zinc-900">{budget.name}</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-zinc-900">
+                {budget.name}
+              </h3>
+              {budget.cumulative && (
+                <span title="Cumulativo">
+                  <RefreshCw className="h-3 w-3 text-zinc-400" />
+                </span>
+              )}
+            </div>
             <span className="text-xs text-zinc-400">{budget.period}</span>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="text-right mr-1">
-            <p className={`text-sm font-bold ${textColor}`}>
-              {formatCurrency(budget.spent)}
-            </p>
-            <p className="text-xs text-zinc-400">de {formatCurrency(budget.limit)}</p>
-          </div>
-          {onEdit && (
-            <div className="relative">
-              <button
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-100 hover:text-zinc-500 transition-colors"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-8 z-20 min-w-[130px] rounded-xl bg-white shadow-xl border border-zinc-100 py-1 overflow-hidden">
-                    <button
-                      onClick={() => { setMenuOpen(false); onEdit(budget); }}
-                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
-                    >
-                      <Pencil className="h-3.5 w-3.5 text-indigo-500" />
-                      Editar
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+        <div className="text-right">
+          <p className={`text-sm font-bold ${textColor}`}>
+            {formatCurrency(budget.spent)}
+          </p>
+          <p className="text-xs text-zinc-400">de {formatCurrency(budget.limit)}</p>
         </div>
       </div>
 

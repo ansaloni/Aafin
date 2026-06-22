@@ -1,45 +1,56 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Menu, Plus, LayoutDashboard, History } from "lucide-react";
+import { Menu, Plus, LayoutDashboard, History, BarChart2, ChevronLeft } from "lucide-react";
 import { Budget, Expense } from "@/lib/data";
 import { HomeView } from "@/components/HomeView";
 import { HistoryView } from "@/components/HistoryView";
+import { AnalysisView } from "@/components/AnalysisView";
+import { BudgetFormView } from "@/components/BudgetFormView";
 import { NewExpenseModal } from "@/components/NewExpenseModal";
 import { EditExpenseModal } from "@/components/EditExpenseModal";
-import { SideDrawer } from "@/components/SideDrawer";
+import { SideDrawer, AppView } from "@/components/SideDrawer";
 import { Toast, ToastData } from "@/components/Toast";
 import { LoginView } from "@/components/LoginView";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { OnboardingModal } from "@/components/OnboardingModal";
-import { EditBudgetModal } from "@/components/EditBudgetModal";
+import { BudgetMigrationModal } from "@/components/BudgetMigrationModal";
 import { useNotifications } from "@/hooks/useNotifications";
 import { getSession, logout as authLogout, deleteAccount as authDeleteAccount } from "@/lib/auth";
 import type { User } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
-type View = "home" | "history";
-
 const bKey = (uid: string) => `grana:budgets:${uid}`;
 const eKey = (uid: string) => `grana:expenses:${uid}`;
 const oKey = (uid: string) => `grana:onboarded:${uid}`;
 
+const VIEW_TITLES: Record<AppView, string> = {
+  home: "Visão Geral",
+  history: "Histórico",
+  analysis: "Análise",
+  "create-budget": "Criar Orçamento",
+  "edit-budget": "Editar Orçamento",
+};
+
 export default function App() {
   const [authLoaded, setAuthLoaded] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<View>("home");
+  const [view, setView] = useState<AppView>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [deletingBudget, setDeletingBudget] = useState<Budget | null>(null);
+  const [analysisBudgetId, setAnalysisBudgetId] = useState<string | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [toast, setToast] = useState<ToastData | null>(null);
-  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
-  const { requestPermission, notifyBudgetAlert, permissionStatus } = useNotifications();
+  const { requestPermission, notifyBudgetAlert, permissionStatus } =
+    useNotifications();
 
   const showToast = useCallback(
     (message: string, type: ToastData["type"] = "success") => {
@@ -116,6 +127,7 @@ export default function App() {
     setBudgets([]);
     setExpenses([]);
     setDrawerOpen(false);
+    setView("home");
   }
 
   function handleDeleteAccount() {
@@ -126,6 +138,7 @@ export default function App() {
     setExpenses([]);
     setDrawerOpen(false);
     setDeleteAccountOpen(false);
+    setView("home");
   }
 
   function handleAddExpense(expense: Omit<Expense, "id">) {
@@ -147,19 +160,18 @@ export default function App() {
     if (!user) return;
     const old = expenses.find((e) => e.id === id);
     if (!old) return;
-
-    const newExpenses = expenses.map((e) => (e.id === id ? { ...updated, id } : e));
+    const newExpenses = expenses.map((e) =>
+      e.id === id ? { ...updated, id } : e
+    );
     const newBudgets = budgets.map((b) => {
       const wasSource = b.id === old.budgetId;
       const isSource = b.id === updated.budgetId;
-      if (wasSource && isSource) {
+      if (wasSource && isSource)
         return { ...b, spent: Math.max(0, b.spent - old.value + updated.value) };
-      }
       if (wasSource) return { ...b, spent: Math.max(0, b.spent - old.value) };
       if (isSource) return { ...b, spent: b.spent + updated.value };
       return b;
     });
-
     setExpenses(newExpenses);
     setBudgets(newBudgets);
     saveExpenses(user.id, newExpenses);
@@ -182,20 +194,94 @@ export default function App() {
     showToast("Despesa excluída", "info");
   }
 
+  function handleCreateBudget(budget: Omit<Budget, "id" | "spent">) {
+    if (!user) return;
+    const newBudgets = [
+      ...budgets,
+      { ...budget, id: `b${Date.now()}`, spent: 0 },
+    ];
+    setBudgets(newBudgets);
+    saveBudgets(user.id, newBudgets);
+    showToast(`Orçamento "${budget.name}" criado!`);
+  }
+
   function handleUpdateBudget(id: string, updated: Omit<Budget, "id" | "spent">) {
     if (!user) return;
-    const newBudgets = budgets.map((b) => (b.id === id ? { ...b, ...updated } : b));
+    const newBudgets = budgets.map((b) =>
+      b.id === id ? { ...b, ...updated } : b
+    );
     setBudgets(newBudgets);
     saveBudgets(user.id, newBudgets);
     showToast(`Orçamento "${updated.name}" atualizado!`);
   }
 
-  function handleCreateBudget(budget: Omit<Budget, "id" | "spent">) {
-    if (!user) return;
-    const newBudgets = [...budgets, { ...budget, id: `b${Date.now()}`, spent: 0 }];
+  function handleConfirmDeleteBudget(migrateTo?: string) {
+    if (!user || !deletingBudget) return;
+    const budget = deletingBudget;
+
+    let newExpenses = expenses;
+    let newBudgets: Budget[];
+
+    if (migrateTo) {
+      const target = budgets.find((b) => b.id === migrateTo);
+      if (target) {
+        newExpenses = expenses.map((e) =>
+          e.budgetId === budget.id
+            ? { ...e, budgetId: migrateTo, budgetName: target.name }
+            : e
+        );
+        newBudgets = budgets
+          .filter((b) => b.id !== budget.id)
+          .map((b) =>
+            b.id === migrateTo
+              ? { ...b, spent: b.spent + budget.spent }
+              : b
+          );
+      } else {
+        newBudgets = budgets.filter((b) => b.id !== budget.id);
+      }
+    } else {
+      newBudgets = budgets.filter((b) => b.id !== budget.id);
+    }
+
+    setExpenses(newExpenses);
     setBudgets(newBudgets);
+    saveExpenses(user.id, newExpenses);
     saveBudgets(user.id, newBudgets);
-    showToast(`Orçamento "${budget.name}" criado!`);
+    setDeletingBudget(null);
+    showToast(`Orçamento "${budget.name}" excluído`, "info");
+  }
+
+  function handleReassignExpenses(
+    expenseIds: string[],
+    targetBudgetId: string
+  ) {
+    if (!user) return;
+    const target = budgets.find((b) => b.id === targetBudgetId);
+    if (!target) return;
+
+    const amount = expenses
+      .filter((e) => expenseIds.includes(e.id))
+      .reduce((s, e) => s + e.value, 0);
+
+    const newExpenses = expenses.map((e) =>
+      expenseIds.includes(e.id)
+        ? { ...e, budgetId: targetBudgetId, budgetName: target.name }
+        : e
+    );
+    const newBudgets = budgets.map((b) =>
+      b.id === targetBudgetId ? { ...b, spent: b.spent + amount } : b
+    );
+
+    setExpenses(newExpenses);
+    setBudgets(newBudgets);
+    saveExpenses(user.id, newExpenses);
+    saveBudgets(user.id, newBudgets);
+
+    const count = expenseIds.length;
+    showToast(
+      `${count} despesa${count > 1 ? "s" : ""} reatribuída${count > 1 ? "s" : ""}!`
+    );
   }
 
   if (!authLoaded) {
@@ -210,8 +296,10 @@ export default function App() {
     return <LoginView onLogin={handleLogin} />;
   }
 
-  const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
-  const totalLimit = budgets.reduce((s, b) => s + b.limit, 0);
+  const isSubView =
+    view === "analysis" ||
+    view === "create-budget" ||
+    view === "edit-budget";
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -219,26 +307,34 @@ export default function App() {
         {/* Header */}
         <header className="sticky top-0 z-30 flex items-center justify-between px-5 py-4 bg-white/90 backdrop-blur-md border-b border-zinc-100">
           <button
-            onClick={() => setDrawerOpen(true)}
+            onClick={
+              isSubView ? () => setView("home") : () => setDrawerOpen(true)
+            }
             className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-700 hover:bg-zinc-100 transition-colors"
-            aria-label="Abrir menu"
+            aria-label={isSubView ? "Voltar" : "Abrir menu"}
           >
-            <Menu className="h-5 w-5" />
+            {isSubView ? (
+              <ChevronLeft className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
           </button>
           <h1 className="text-base font-bold text-zinc-900">
-            {view === "home" ? "Visão Geral" : "Histórico"}
+            {VIEW_TITLES[view]}
           </h1>
           <div className="w-9" />
         </header>
 
         {/* Content */}
         <main className="flex-1 px-4 pt-5 pb-28 overflow-y-auto">
-          {/* Notification banner */}
+          {/* Notification banner — only on home */}
           {permissionStatus === "default" && view === "home" && (
             <div className="mb-4 flex items-center gap-3 rounded-2xl bg-indigo-50 border border-indigo-100 px-4 py-3">
               <span className="text-lg flex-shrink-0">🔔</span>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-indigo-900">Ativar notificações</p>
+                <p className="text-xs font-semibold text-indigo-900">
+                  Ativar notificações
+                </p>
                 <p className="text-xs text-indigo-600 mt-0.5">
                   Receba alertas quando o orçamento estiver próximo do limite
                 </p>
@@ -252,19 +348,63 @@ export default function App() {
             </div>
           )}
 
-          {view === "home" ? (
+          {view === "home" && (
             <HomeView
               budgets={budgets}
-              totalSpent={totalSpent}
-              totalLimit={totalLimit}
-              onEditBudget={setEditingBudget}
+              expenses={expenses}
+              onBudgetClick={(id) => {
+                setAnalysisBudgetId(id);
+                setView("analysis");
+              }}
+              onOverallClick={() => {
+                setAnalysisBudgetId(null);
+                setView("analysis");
+              }}
             />
-          ) : (
+          )}
+
+          {view === "history" && (
             <HistoryView
               expenses={expenses}
               budgets={budgets}
               onEdit={setEditingExpense}
               onDelete={setDeletingExpense}
+              onReassign={handleReassignExpenses}
+            />
+          )}
+
+          {view === "analysis" && (
+            <AnalysisView
+              expenses={expenses}
+              budgets={budgets}
+              initialBudgetId={analysisBudgetId}
+            />
+          )}
+
+          {view === "create-budget" && (
+            <BudgetFormView
+              mode="create"
+              onSubmit={(data) => {
+                handleCreateBudget(data);
+                setView("home");
+              }}
+              onCancel={() => setView("home")}
+            />
+          )}
+
+          {view === "edit-budget" && (
+            <BudgetFormView
+              mode="edit"
+              budget={editingBudget}
+              onSubmit={(data) => {
+                if (editingBudget) handleUpdateBudget(editingBudget.id, data);
+                setEditingBudget(null);
+                setView("home");
+              }}
+              onCancel={() => {
+                setEditingBudget(null);
+                setView("home");
+              }}
             />
           )}
         </main>
@@ -275,8 +415,10 @@ export default function App() {
             <button
               onClick={() => setView("home")}
               className={cn(
-                "flex flex-col items-center gap-1 px-6 py-1.5 rounded-xl transition-all",
-                view === "home" ? "text-indigo-600" : "text-zinc-400 hover:text-zinc-600"
+                "flex flex-col items-center gap-1 px-5 py-1.5 rounded-xl transition-all",
+                view === "home"
+                  ? "text-indigo-600"
+                  : "text-zinc-400 hover:text-zinc-600"
               )}
             >
               <LayoutDashboard className="h-5 w-5" />
@@ -294,8 +436,10 @@ export default function App() {
             <button
               onClick={() => setView("history")}
               className={cn(
-                "flex flex-col items-center gap-1 px-6 py-1.5 rounded-xl transition-all",
-                view === "history" ? "text-indigo-600" : "text-zinc-400 hover:text-zinc-600"
+                "flex flex-col items-center gap-1 px-5 py-1.5 rounded-xl transition-all",
+                view === "history"
+                  ? "text-indigo-600"
+                  : "text-zinc-400 hover:text-zinc-600"
               )}
             >
               <History className="h-5 w-5" />
@@ -308,15 +452,20 @@ export default function App() {
         <SideDrawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-          onCreateBudget={handleCreateBudget}
+          budgets={budgets}
           activeView={view}
           onNavigate={setView}
+          onEditBudget={(budget) => {
+            setEditingBudget(budget);
+            setView("edit-budget");
+          }}
+          onDeleteBudget={setDeletingBudget}
           user={user}
           onLogout={handleLogout}
           onDeleteAccount={() => setDeleteAccountOpen(true)}
         />
 
-        {/* Modals */}
+        {/* Expense modals */}
         <NewExpenseModal
           open={expenseModalOpen}
           onClose={() => setExpenseModalOpen(false)}
@@ -335,11 +484,22 @@ export default function App() {
         <ConfirmModal
           open={deletingExpense !== null}
           onClose={() => setDeletingExpense(null)}
-          onConfirm={() => deletingExpense && handleDeleteExpense(deletingExpense)}
+          onConfirm={() =>
+            deletingExpense && handleDeleteExpense(deletingExpense)
+          }
           title="Excluir Despesa"
           message={`Tem certeza que deseja excluir "${deletingExpense?.name}"? Esta ação não pode ser desfeita.`}
           confirmLabel="Excluir"
           danger
+        />
+
+        {/* Budget deletion modal */}
+        <BudgetMigrationModal
+          open={deletingBudget !== null}
+          onClose={() => setDeletingBudget(null)}
+          budget={deletingBudget}
+          availableBudgets={budgets.filter((b) => b.id !== deletingBudget?.id)}
+          onConfirm={handleConfirmDeleteBudget}
         />
 
         <Toast toast={toast} onDismiss={() => setToast(null)} />
@@ -352,13 +512,6 @@ export default function App() {
           message="Tem certeza que deseja excluir sua conta? Todos os seus dados, orçamentos e despesas serão apagados permanentemente."
           confirmLabel="Excluir Conta"
           danger
-        />
-
-        <EditBudgetModal
-          open={editingBudget !== null}
-          onClose={() => setEditingBudget(null)}
-          budget={editingBudget}
-          onUpdate={handleUpdateBudget}
         />
 
         <OnboardingModal open={onboardingOpen} onClose={handleCloseOnboarding} />

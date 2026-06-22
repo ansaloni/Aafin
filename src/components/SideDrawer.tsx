@@ -1,87 +1,67 @@
 "use client";
 
 import { useState } from "react";
-import { X, PiggyBank, LayoutDashboard, History, ChevronRight, LogOut, Trash2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { Budget, BudgetPeriod, BUDGET_COLORS } from "@/lib/data";
+import {
+  X,
+  PiggyBank,
+  LayoutDashboard,
+  History,
+  ChevronRight,
+  LogOut,
+  Trash2,
+  BarChart2,
+  Pencil,
+  Plus,
+  ChevronLeft,
+} from "lucide-react";
+import { Budget } from "@/lib/data";
 import type { User } from "@/lib/auth";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+
+export type AppView =
+  | "home"
+  | "history"
+  | "analysis"
+  | "create-budget"
+  | "edit-budget";
 
 interface SideDrawerProps {
   open: boolean;
   onClose: () => void;
-  onCreateBudget: (budget: Omit<Budget, "id" | "spent">) => void;
-  activeView: "home" | "history";
-  onNavigate: (view: "home" | "history") => void;
+  budgets: Budget[];
+  activeView: AppView;
+  onNavigate: (view: AppView) => void;
+  onEditBudget: (budget: Budget) => void;
+  onDeleteBudget: (budget: Budget) => void;
   user: User;
   onLogout: () => void;
   onDeleteAccount: () => void;
 }
 
-const periodOptions: { value: BudgetPeriod; label: string }[] = [
-  { value: "Diário", label: "Diário" },
-  { value: "Semanal", label: "Semanal" },
-  { value: "Mensal", label: "Mensal" },
-  { value: "Anual", label: "Anual" },
-];
-
-const initialForm = {
-  name: "",
-  limit: "",
-  period: "Mensal" as BudgetPeriod,
-  cumulative: false,
-  color: BUDGET_COLORS[0],
-};
+type Section = "menu" | "budgets";
 
 export function SideDrawer({
   open,
   onClose,
-  onCreateBudget,
+  budgets,
   activeView,
   onNavigate,
+  onEditBudget,
+  onDeleteBudget,
   user,
   onLogout,
   onDeleteAccount,
 }: SideDrawerProps) {
-  const [form, setForm] = useState(initialForm);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [section, setSection] = useState<"menu" | "create">("menu");
-
-  function validate() {
-    const errs: Record<string, string> = {};
-    if (!form.name.trim()) errs.name = "Nome é obrigatório";
-    if (!form.limit || isNaN(Number(form.limit)) || Number(form.limit) <= 0)
-      errs.limit = "Insira um valor válido";
-    return errs;
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      return;
-    }
-    onCreateBudget({
-      name: form.name.trim(),
-      limit: Number(form.limit),
-      period: form.period,
-      cumulative: form.cumulative,
-      color: form.color,
-    });
-    setForm(initialForm);
-    setErrors({});
-    setSection("menu");
-    onClose();
-  }
+  const [section, setSection] = useState<Section>("menu");
 
   function handleClose() {
     setSection("menu");
-    setErrors({});
     onClose();
+  }
+
+  function navigate(view: AppView) {
+    handleClose();
+    onNavigate(view);
   }
 
   const userInitials = user.name
@@ -126,10 +106,7 @@ export function SideDrawer({
                   Navegação
                 </p>
                 <button
-                  onClick={() => {
-                    onNavigate("home");
-                    handleClose();
-                  }}
+                  onClick={() => navigate("home")}
                   className={cn(
                     "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                     activeView === "home"
@@ -141,10 +118,7 @@ export function SideDrawer({
                   Visão Geral
                 </button>
                 <button
-                  onClick={() => {
-                    onNavigate("history");
-                    handleClose();
-                  }}
+                  onClick={() => navigate("history")}
                   className={cn(
                     "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                     activeView === "history"
@@ -155,118 +129,129 @@ export function SideDrawer({
                   <History className="h-4 w-4" />
                   Histórico
                 </button>
+                <button
+                  onClick={() => navigate("analysis")}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                    activeView === "analysis"
+                      ? "bg-indigo-50 text-indigo-700"
+                      : "text-zinc-700 hover:bg-zinc-50"
+                  )}
+                >
+                  <BarChart2 className="h-4 w-4" />
+                  Análise
+                </button>
               </div>
 
               <div className="mx-3 my-2 h-px bg-zinc-100" />
 
               {/* Budgets */}
               <div className="px-3">
-                <p className="px-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-                  Orçamentos
-                </p>
-                <button
-                  onClick={() => setSection("create")}
-                  className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between px-2 mb-1">
+                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Orçamentos
+                  </p>
+                  <button
+                    onClick={() => navigate("create-budget")}
+                    className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition-colors"
+                    title="Criar orçamento"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </div>
+
+                {budgets.length === 0 ? (
+                  <button
+                    onClick={() => navigate("create-budget")}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-zinc-50 transition-colors"
+                  >
                     <PiggyBank className="h-4 w-4" />
-                    Criar Orçamento
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-400" />
-                </button>
+                    Criar primeiro orçamento
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSection("budgets")}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <PiggyBank className="h-4 w-4" />
+                      Gerenciar Orçamentos
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-400">
+                        {budgets.length}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-zinc-400" />
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
           ) : (
-            <div className="px-5 py-4">
-              <button
-                onClick={() => setSection("menu")}
-                className="flex items-center gap-1.5 text-sm text-indigo-600 font-medium mb-4 hover:text-indigo-700 transition-colors"
-              >
-                <ChevronRight className="h-3.5 w-3.5 rotate-180" />
-                Voltar ao menu
-              </button>
+            /* Budget management section */
+            <div className="py-3">
+              <div className="px-3 mb-3 flex items-center gap-2">
+                <button
+                  onClick={() => setSection("menu")}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm font-semibold text-zinc-900">
+                  Orçamentos
+                </span>
+              </div>
 
-              <h3 className="text-base font-bold text-zinc-900 mb-4">Criar Orçamento</h3>
+              <div className="px-3">
+                <button
+                  onClick={() => navigate("create-budget")}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 transition-colors mb-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Criar novo orçamento
+                </button>
 
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <Input
-                  label="Nome do Orçamento"
-                  placeholder="Ex: Alimentação, Lazer..."
-                  value={form.name}
-                  onChange={(e) => {
-                    setForm((p) => ({ ...p, name: e.target.value }));
-                    if (errors.name) setErrors((p) => ({ ...p, name: "" }));
-                  }}
-                  error={errors.name}
-                  autoFocus
-                />
-
-                <Input
-                  label="Valor Limite (R$)"
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  min="0.01"
-                  step="0.01"
-                  value={form.limit}
-                  onChange={(e) => {
-                    setForm((p) => ({ ...p, limit: e.target.value }));
-                    if (errors.limit) setErrors((p) => ({ ...p, limit: "" }));
-                  }}
-                  error={errors.limit}
-                />
-
-                <Select
-                  label="Prazo"
-                  options={periodOptions}
-                  value={form.period}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, period: e.target.value as BudgetPeriod }))
-                  }
-                />
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-zinc-700">Cor</label>
-                  <div className="flex gap-2 flex-wrap">
-                    {BUDGET_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setForm((p) => ({ ...p, color }))}
-                        className={cn(
-                          "h-7 w-7 rounded-full transition-all",
-                          form.color === color
-                            ? "ring-2 ring-offset-2 ring-zinc-900 scale-110"
-                            : "hover:scale-105"
-                        )}
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <Switch
-                  label="Orçamento Cumulativo"
-                  description="Saldo restante acumula para o próximo período"
-                  checked={form.cumulative}
-                  onCheckedChange={(v) => setForm((p) => ({ ...p, cumulative: v }))}
-                />
-
-                <div className="flex gap-3 pt-1 pb-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setSection("menu")}
+                {budgets.map((budget) => (
+                  <div
+                    key={budget.id}
+                    className="flex items-center gap-2 rounded-xl px-3 py-2.5 hover:bg-zinc-50 transition-colors"
                   >
-                    Cancelar
-                  </Button>
-                  <Button type="submit" size="sm" className="flex-1">
-                    Criar
-                  </Button>
-                </div>
-              </form>
+                    <span
+                      className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: budget.color }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-800 truncate">
+                        {budget.name}
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        {formatCurrency(budget.spent)} /{" "}
+                        {formatCurrency(budget.limit)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        handleClose();
+                        onEditBudget(budget);
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 transition-colors"
+                      title="Editar"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleClose();
+                        onDeleteBudget(budget);
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      title="Excluir"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -275,10 +260,14 @@ export function SideDrawer({
         <div className="border-t border-zinc-100 p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-100">
-              <span className="text-xs font-bold text-indigo-700">{userInitials}</span>
+              <span className="text-xs font-bold text-indigo-700">
+                {userInitials}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-zinc-900 truncate">{user.name}</p>
+              <p className="text-sm font-semibold text-zinc-900 truncate">
+                {user.name}
+              </p>
               <p className="text-xs text-zinc-400 truncate">{user.email}</p>
             </div>
             <div className="flex items-center gap-1">
