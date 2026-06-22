@@ -12,6 +12,7 @@ import { Toast, ToastData } from "@/components/Toast";
 import { LoginView } from "@/components/LoginView";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { OnboardingModal } from "@/components/OnboardingModal";
+import { EditBudgetModal } from "@/components/EditBudgetModal";
 import { useNotifications } from "@/hooks/useNotifications";
 import { getSession, logout as authLogout, deleteAccount as authDeleteAccount } from "@/lib/auth";
 import type { User } from "@/lib/auth";
@@ -34,6 +35,7 @@ export default function App() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [toast, setToast] = useState<ToastData | null>(null);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
@@ -52,7 +54,6 @@ export default function App() {
       const e = localStorage.getItem(eKey(uid));
       setBudgets(b ? JSON.parse(b) : []);
       setExpenses(e ? JSON.parse(e) : []);
-      // Auto-mark existing users (who already have data) as onboarded
       if (b !== null && !localStorage.getItem(oKey(uid))) {
         localStorage.setItem(oKey(uid), "1");
       }
@@ -181,6 +182,14 @@ export default function App() {
     showToast("Despesa excluída", "info");
   }
 
+  function handleUpdateBudget(id: string, updated: Omit<Budget, "id" | "spent">) {
+    if (!user) return;
+    const newBudgets = budgets.map((b) => (b.id === id ? { ...b, ...updated } : b));
+    setBudgets(newBudgets);
+    saveBudgets(user.id, newBudgets);
+    showToast(`Orçamento "${updated.name}" atualizado!`);
+  }
+
   function handleCreateBudget(budget: Omit<Budget, "id" | "spent">) {
     if (!user) return;
     const newBudgets = [...budgets, { ...budget, id: `b${Date.now()}`, spent: 0 }];
@@ -248,6 +257,7 @@ export default function App() {
               budgets={budgets}
               totalSpent={totalSpent}
               totalLimit={totalLimit}
+              onEditBudget={setEditingBudget}
             />
           ) : (
             <HistoryView
@@ -342,6 +352,13 @@ export default function App() {
           message="Tem certeza que deseja excluir sua conta? Todos os seus dados, orçamentos e despesas serão apagados permanentemente."
           confirmLabel="Excluir Conta"
           danger
+        />
+
+        <EditBudgetModal
+          open={editingBudget !== null}
+          onClose={() => setEditingBudget(null)}
+          budget={editingBudget}
+          onUpdate={handleUpdateBudget}
         />
 
         <OnboardingModal open={onboardingOpen} onClose={handleCloseOnboarding} />

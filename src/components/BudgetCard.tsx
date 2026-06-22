@@ -1,13 +1,17 @@
 "use client";
 
+import { useState } from "react";
+import { MoreVertical, Pencil } from "lucide-react";
 import { Budget } from "@/lib/data";
 import { formatCurrency, getProgressColor, getProgressTextColor } from "@/lib/utils";
 
 interface BudgetCardProps {
   budget: Budget;
+  onEdit?: (budget: Budget) => void;
 }
 
-export function BudgetCard({ budget }: BudgetCardProps) {
+export function BudgetCard({ budget, onEdit }: BudgetCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const percent = Math.min((budget.spent / budget.limit) * 100, 100);
   const remaining = budget.limit - budget.spent;
   const progressColor = getProgressColor(percent);
@@ -26,11 +30,37 @@ export function BudgetCard({ budget }: BudgetCardProps) {
             <span className="text-xs text-zinc-400">{budget.period}</span>
           </div>
         </div>
-        <div className="text-right">
-          <p className={`text-sm font-bold ${textColor}`}>
-            {formatCurrency(budget.spent)}
-          </p>
-          <p className="text-xs text-zinc-400">de {formatCurrency(budget.limit)}</p>
+        <div className="flex items-center gap-1">
+          <div className="text-right mr-1">
+            <p className={`text-sm font-bold ${textColor}`}>
+              {formatCurrency(budget.spent)}
+            </p>
+            <p className="text-xs text-zinc-400">de {formatCurrency(budget.limit)}</p>
+          </div>
+          {onEdit && (
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-100 hover:text-zinc-500 transition-colors"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-8 z-20 min-w-[130px] rounded-xl bg-white shadow-xl border border-zinc-100 py-1 overflow-hidden">
+                    <button
+                      onClick={() => { setMenuOpen(false); onEdit(budget); }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-indigo-500" />
+                      Editar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

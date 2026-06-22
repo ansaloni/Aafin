@@ -9,14 +9,16 @@ interface HomeViewProps {
   budgets: Budget[];
   totalSpent: number;
   totalLimit: number;
+  onEditBudget?: (budget: Budget) => void;
 }
 
-export function HomeView({ budgets, totalSpent, totalLimit }: HomeViewProps) {
+export function HomeView({ budgets, totalSpent, totalLimit, onEditBudget }: HomeViewProps) {
   const totalRemaining = totalLimit - totalSpent;
   const overallPercent = totalLimit > 0 ? (totalSpent / totalLimit) * 100 : 0;
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Summary Card */}
       <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-3xl p-5 text-white shadow-lg shadow-indigo-200">
         <div className="flex items-center gap-2 mb-1">
           <Wallet className="h-4 w-4 opacity-80" />
@@ -49,6 +51,7 @@ export function HomeView({ budgets, totalSpent, totalLimit }: HomeViewProps) {
         </div>
       </div>
 
+      {/* Budget list */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-zinc-900">Orçamentos</h2>
@@ -66,7 +69,7 @@ export function HomeView({ budgets, totalSpent, totalLimit }: HomeViewProps) {
         ) : (
           <div className="flex flex-col gap-3">
             {budgets.map((budget) => (
-              <BudgetCard key={budget.id} budget={budget} />
+              <BudgetCard key={budget.id} budget={budget} onEdit={onEditBudget} />
             ))}
           </div>
         )}
