@@ -11,16 +11,13 @@ import { cn } from "@/lib/utils";
 interface HistoryViewProps {
   expenses: Expense[];
   budgets: Budget[];
+  onEdit?: (expense: Expense) => void;
+  onDelete?: (expense: Expense) => void;
 }
 
-const defaultFilters: Filters = {
-  budgetId: "",
-  dateFrom: "",
-  dateTo: "",
-  sortBy: "date_desc",
-};
+const defaultFilters: Filters = { budgetId: "", dateFrom: "", dateTo: "", sortBy: "date_desc" };
 
-export function HistoryView({ expenses, budgets }: HistoryViewProps) {
+export function HistoryView({ expenses, budgets, onEdit, onDelete }: HistoryViewProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
 
@@ -63,7 +60,6 @@ export function HistoryView({ expenses, budgets }: HistoryViewProps) {
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-
     if (dateStr === today.toISOString().slice(0, 10)) return "Hoje";
     if (dateStr === yesterday.toISOString().slice(0, 10)) return "Ontem";
     return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long" }).format(date);
@@ -82,27 +78,17 @@ export function HistoryView({ expenses, budgets }: HistoryViewProps) {
         </h2>
         <div className="flex items-center gap-2">
           {activeFilterCount > 0 && (
-            <button
-              onClick={() => setFilters(defaultFilters)}
-              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 transition-colors font-medium"
-            >
-              <X className="h-3 w-3" />
-              Limpar filtros
+            <button onClick={() => setFilters(defaultFilters)}
+              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 transition-colors font-medium">
+              <X className="h-3 w-3" />Limpar
             </button>
           )}
-          <Button
-            variant={activeFilterCount > 0 ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilterOpen(true)}
-            className="gap-1.5"
-          >
+          <Button variant={activeFilterCount > 0 ? "default" : "outline"} size="sm"
+            onClick={() => setFilterOpen(true)} className="gap-1.5">
             <SlidersHorizontal className="h-3.5 w-3.5" />
             Filtros
             {activeFilterCount > 0 && (
-              <span className={cn(
-                "flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold",
-                "bg-white text-indigo-600"
-              )}>
+              <span className={cn("flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold", "bg-white text-indigo-600")}>
                 {activeFilterCount}
               </span>
             )}
@@ -123,17 +109,11 @@ export function HistoryView({ expenses, budgets }: HistoryViewProps) {
       ) : (
         <div className="flex flex-col gap-4">
           {Object.entries(groups)
-            .sort(([a], [b]) =>
-              filters.sortBy.startsWith("date_asc")
-                ? a.localeCompare(b)
-                : b.localeCompare(a)
-            )
+            .sort(([a], [b]) => filters.sortBy.startsWith("date_asc") ? a.localeCompare(b) : b.localeCompare(a))
             .map(([date, items]) => (
               <div key={date}>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-semibold text-zinc-500">
-                    {formatGroupDate(date)}
-                  </span>
+                  <span className="text-xs font-semibold text-zinc-500">{formatGroupDate(date)}</span>
                   <div className="flex-1 h-px bg-zinc-100" />
                   <span className="text-xs text-zinc-400">
                     {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
@@ -143,7 +123,8 @@ export function HistoryView({ expenses, budgets }: HistoryViewProps) {
                 </div>
                 <div className="flex flex-col gap-2">
                   {items.map((expense) => (
-                    <ExpenseItem key={expense.id} expense={expense} budgets={budgets} />
+                    <ExpenseItem key={expense.id} expense={expense} budgets={budgets}
+                      onEdit={onEdit} onDelete={onDelete} />
                   ))}
                 </div>
               </div>
@@ -151,13 +132,8 @@ export function HistoryView({ expenses, budgets }: HistoryViewProps) {
         </div>
       )}
 
-      <FilterModal
-        open={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        budgets={budgets}
-        filters={filters}
-        onApply={setFilters}
-      />
+      <FilterModal open={filterOpen} onClose={() => setFilterOpen(false)}
+        budgets={budgets} filters={filters} onApply={setFilters} />
     </div>
   );
 }
