@@ -8,8 +8,8 @@ interface StoredUser extends User {
   password: string;
 }
 
-const USERS_KEY = "aafin:users";
-const SESSION_KEY = "aafin:session";
+const USERS_KEY = "grana:users";
+const SESSION_KEY = "grana:session";
 
 function hashPassword(str: string): string {
   let h = 0;

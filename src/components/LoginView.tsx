@@ -72,19 +72,24 @@ export function LoginView({ onLogin }: LoginViewProps) {
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
       <div className="mx-auto w-full max-w-[430px] min-h-screen flex flex-col bg-white shadow-2xl">
+        {/* Hero */}
         <div className="flex flex-col items-center pt-16 pb-10 bg-gradient-to-b from-indigo-600 to-indigo-500">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 mb-4 shadow-lg">
             <PiggyBank className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Aafin</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Grana</h1>
           <p className="text-sm text-indigo-200 mt-1">Gestão financeira simplificada</p>
         </div>
 
+        {/* Tabs */}
         <div className="flex border-b border-zinc-100 mx-6 mt-6">
           {(["login", "register"] as const).map((t) => (
             <button
               key={t}
-              onClick={() => { setTab(t); setError(""); }}
+              onClick={() => {
+                setTab(t);
+                setError("");
+              }}
               className={`flex-1 pb-3 text-sm font-semibold transition-colors ${
                 tab === t
                   ? "text-indigo-600 border-b-2 border-indigo-600"
@@ -96,6 +101,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
           ))}
         </div>
 
+        {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 pt-6 pb-8">
           {tab === "register" && (
             <Input
@@ -144,7 +150,11 @@ export function LoginView({ onLogin }: LoginViewProps) {
           )}
 
           <Button type="submit" size="lg" disabled={loading} className="mt-2">
-            {loading ? "Carregando..." : tab === "login" ? "Entrar" : "Criar Conta"}
+            {loading
+              ? "Carregando..."
+              : tab === "login"
+              ? "Entrar"
+              : "Criar Conta"}
           </Button>
 
           {tab === "login" && (

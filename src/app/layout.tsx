@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aafin — Gestão Financeira",
+  title: "Grana — Gestão Financeira",
   description: "Controle seus gastos e orçamentos de forma simples",
 };
 

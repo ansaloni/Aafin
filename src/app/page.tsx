@@ -18,8 +18,8 @@ import { cn } from "@/lib/utils";
 
 type View = "home" | "history";
 
-const bKey = (uid: string) => `aafin:budgets:${uid}`;
-const eKey = (uid: string) => `aafin:expenses:${uid}`;
+const bKey = (uid: string) => `grana:budgets:${uid}`;
+const eKey = (uid: string) => `grana:expenses:${uid}`;
 
 export default function App() {
   const [authLoaded, setAuthLoaded] = useState(false);
@@ -35,9 +35,12 @@ export default function App() {
 
   const { requestPermission, notifyBudgetAlert, permissionStatus } = useNotifications();
 
-  const showToast = useCallback((message: string, type: ToastData["type"] = "success") => {
-    setToast({ message, type });
-  }, []);
+  const showToast = useCallback(
+    (message: string, type: ToastData["type"] = "success") => {
+      setToast({ message, type });
+    },
+    []
+  );
 
   function loadUserData(uid: string) {
     try {
@@ -53,12 +56,20 @@ export default function App() {
 
   useEffect(() => {
     const session = getSession();
-    if (session) { setUser(session); loadUserData(session.id); }
+    if (session) {
+      setUser(session);
+      loadUserData(session.id);
+    }
     setAuthLoaded(true);
   }, []);
 
-  function saveBudgets(uid: string, data: Budget[]) { localStorage.setItem(bKey(uid), JSON.stringify(data)); }
-  function saveExpenses(uid: string, data: Expense[]) { localStorage.setItem(eKey(uid), JSON.stringify(data)); }
+  function saveBudgets(uid: string, data: Budget[]) {
+    localStorage.setItem(bKey(uid), JSON.stringify(data));
+  }
+
+  function saveExpenses(uid: string, data: Expense[]) {
+    localStorage.setItem(eKey(uid), JSON.stringify(data));
+  }
 
   function checkThresholds(updated: Budget[], prev: Budget[]) {
     updated.forEach((b) => {
@@ -66,23 +77,40 @@ export default function App() {
       if (!old) return;
       const oldPct = (old.spent / old.limit) * 100;
       const newPct = (b.spent / b.limit) * 100;
-      if ((oldPct < 75 && newPct >= 75) || (oldPct < 90 && newPct >= 90) || (oldPct < 100 && newPct >= 100)) {
+      if (
+        (oldPct < 75 && newPct >= 75) ||
+        (oldPct < 90 && newPct >= 90) ||
+        (oldPct < 100 && newPct >= 100)
+      ) {
         notifyBudgetAlert(b.name, newPct);
       }
     });
   }
 
-  function handleLogin(loggedUser: User) { setUser(loggedUser); loadUserData(loggedUser.id); }
+  function handleLogin(loggedUser: User) {
+    setUser(loggedUser);
+    loadUserData(loggedUser.id);
+  }
 
-  function handleLogout() { authLogout(); setUser(null); setBudgets([]); setExpenses([]); setDrawerOpen(false); }
+  function handleLogout() {
+    authLogout();
+    setUser(null);
+    setBudgets([]);
+    setExpenses([]);
+    setDrawerOpen(false);
+  }
 
   function handleAddExpense(expense: Omit<Expense, "id">) {
     if (!user) return;
     const newExpense: Expense = { ...expense, id: `e${Date.now()}` };
     const newExpenses = [newExpense, ...expenses];
-    const newBudgets = budgets.map((b) => b.id === expense.budgetId ? { ...b, spent: b.spent + expense.value } : b);
-    setExpenses(newExpenses); setBudgets(newBudgets);
-    saveExpenses(user.id, newExpenses); saveBudgets(user.id, newBudgets);
+    const newBudgets = budgets.map((b) =>
+      b.id === expense.budgetId ? { ...b, spent: b.spent + expense.value } : b
+    );
+    setExpenses(newExpenses);
+    setBudgets(newBudgets);
+    saveExpenses(user.id, newExpenses);
+    saveBudgets(user.id, newBudgets);
     checkThresholds(newBudgets, budgets);
     showToast("Despesa adicionada!");
   }
@@ -91,33 +119,46 @@ export default function App() {
     if (!user) return;
     const old = expenses.find((e) => e.id === id);
     if (!old) return;
-    const newExpenses = expenses.map((e) => e.id === id ? { ...updated, id } : e);
+
+    const newExpenses = expenses.map((e) => (e.id === id ? { ...updated, id } : e));
     const newBudgets = budgets.map((b) => {
       const wasSource = b.id === old.budgetId;
       const isSource = b.id === updated.budgetId;
-      if (wasSource && isSource) return { ...b, spent: Math.max(0, b.spent - old.value + updated.value) };
+      if (wasSource && isSource) {
+        return { ...b, spent: Math.max(0, b.spent - old.value + updated.value) };
+      }
       if (wasSource) return { ...b, spent: Math.max(0, b.spent - old.value) };
       if (isSource) return { ...b, spent: b.spent + updated.value };
       return b;
     });
-    setExpenses(newExpenses); setBudgets(newBudgets);
-    saveExpenses(user.id, newExpenses); saveBudgets(user.id, newBudgets);
+
+    setExpenses(newExpenses);
+    setBudgets(newBudgets);
+    saveExpenses(user.id, newExpenses);
+    saveBudgets(user.id, newBudgets);
     showToast("Despesa atualizada!");
   }
 
   function handleDeleteExpense(expense: Expense) {
     if (!user) return;
     const newExpenses = expenses.filter((e) => e.id !== expense.id);
-    const newBudgets = budgets.map((b) => b.id === expense.budgetId ? { ...b, spent: Math.max(0, b.spent - expense.value) } : b);
-    setExpenses(newExpenses); setBudgets(newBudgets);
-    saveExpenses(user.id, newExpenses); saveBudgets(user.id, newBudgets);
-    showToast("Despesa exluída", "info");
+    const newBudgets = budgets.map((b) =>
+      b.id === expense.budgetId
+        ? { ...b, spent: Math.max(0, b.spent - expense.value) }
+        : b
+    );
+    setExpenses(newExpenses);
+    setBudgets(newBudgets);
+    saveExpenses(user.id, newExpenses);
+    saveBudgets(user.id, newBudgets);
+    showToast("Despesa excluída", "info");
   }
 
   function handleCreateBudget(budget: Omit<Budget, "id" | "spent">) {
     if (!user) return;
     const newBudgets = [...budgets, { ...budget, id: `b${Date.now()}`, spent: 0 }];
-    setBudgets(newBudgets); saveBudgets(user.id, newBudgets);
+    setBudgets(newBudgets);
+    saveBudgets(user.id, newBudgets);
     showToast(`Orçamento "${budget.name}" criado!`);
   }
 
@@ -129,7 +170,9 @@ export default function App() {
     );
   }
 
-  if (!user) return <LoginView onLogin={handleLogin} />;
+  if (!user) {
+    return <LoginView onLogin={handleLogin} />;
+  }
 
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
   const totalLimit = budgets.reduce((s, b) => s + b.limit, 0);
@@ -137,67 +180,129 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-50">
       <div className="mx-auto max-w-[430px] min-h-screen relative bg-zinc-50 flex flex-col shadow-2xl">
+        {/* Header */}
         <header className="sticky top-0 z-30 flex items-center justify-between px-5 py-4 bg-white/90 backdrop-blur-md border-b border-zinc-100">
-          <button onClick={() => setDrawerOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-700 hover:bg-zinc-100 transition-colors" aria-label="Abrir menu">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-700 hover:bg-zinc-100 transition-colors"
+            aria-label="Abrir menu"
+          >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="text-base font-bold text-zinc-900">{view === "home" ? "Visão Geral" : "Histórico"}</h1>
+          <h1 className="text-base font-bold text-zinc-900">
+            {view === "home" ? "Visão Geral" : "Histórico"}
+          </h1>
           <div className="w-9" />
         </header>
 
+        {/* Content */}
         <main className="flex-1 px-4 pt-5 pb-28 overflow-y-auto">
+          {/* Notification banner */}
           {permissionStatus === "default" && view === "home" && (
             <div className="mb-4 flex items-center gap-3 rounded-2xl bg-indigo-50 border border-indigo-100 px-4 py-3">
               <span className="text-lg flex-shrink-0">🔔</span>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-indigo-900">Ativar notificações</p>
-                <p className="text-xs text-indigo-600 mt-0.5">Receba alertas quando o orçamento estiver próximo do limite</p>
+                <p className="text-xs text-indigo-600 mt-0.5">
+                  Receba alertas quando o orçamento estiver próximo do limite
+                </p>
               </div>
-              <button onClick={requestPermission} className="flex-shrink-0 text-xs font-bold text-indigo-600 hover:text-indigo-700 underline">Ativar</button>
+              <button
+                onClick={requestPermission}
+                className="flex-shrink-0 text-xs font-bold text-indigo-600 hover:text-indigo-700 underline"
+              >
+                Ativar
+              </button>
             </div>
           )}
+
           {view === "home" ? (
-            <HomeView budgets={budgets} totalSpent={totalSpent} totalLimit={totalLimit} />
+            <HomeView
+              budgets={budgets}
+              totalSpent={totalSpent}
+              totalLimit={totalLimit}
+            />
           ) : (
-            <HistoryView expenses={expenses} budgets={budgets} onEdit={setEditingExpense} onDelete={setDeletingExpense} />
+            <HistoryView
+              expenses={expenses}
+              budgets={budgets}
+              onEdit={setEditingExpense}
+              onDelete={setDeletingExpense}
+            />
           )}
         </main>
 
+        {/* Bottom nav */}
         <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-30 bg-white/95 backdrop-blur-md border-t border-zinc-100">
           <div className="flex items-center justify-around px-4 pt-2 pb-4">
-            <button onClick={() => setView("home")}
-              className={cn("flex flex-col items-center gap-1 px-6 py-1.5 rounded-xl transition-all", view === "home" ? "text-indigo-600" : "text-zinc-400 hover:text-zinc-600")}>
+            <button
+              onClick={() => setView("home")}
+              className={cn(
+                "flex flex-col items-center gap-1 px-6 py-1.5 rounded-xl transition-all",
+                view === "home" ? "text-indigo-600" : "text-zinc-400 hover:text-zinc-600"
+              )}
+            >
               <LayoutDashboard className="h-5 w-5" />
               <span className="text-[10px] font-semibold">Início</span>
             </button>
-            <button onClick={() => setExpenseModalOpen(true)}
+
+            <button
+              onClick={() => setExpenseModalOpen(true)}
               className="flex h-14 w-14 -mt-7 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-300 hover:bg-indigo-700 active:scale-95 transition-all"
-              aria-label="Nova Despesa">
+              aria-label="Nova Despesa"
+            >
               <Plus className="h-6 w-6" strokeWidth={2.5} />
             </button>
-            <button onClick={() => setView("history")}
-              className={cn("flex flex-col items-center gap-1 px-6 py-1.5 rounded-xl transition-all", view === "history" ? "text-indigo-600" : "text-zinc-400 hover:text-zinc-600")}>
+
+            <button
+              onClick={() => setView("history")}
+              className={cn(
+                "flex flex-col items-center gap-1 px-6 py-1.5 rounded-xl transition-all",
+                view === "history" ? "text-indigo-600" : "text-zinc-400 hover:text-zinc-600"
+              )}
+            >
               <History className="h-5 w-5" />
               <span className="text-[10px] font-semibold">Histórico</span>
             </button>
           </div>
         </nav>
 
-        <SideDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onCreateBudget={handleCreateBudget}
-          activeView={view} onNavigate={setView} user={user} onLogout={handleLogout} />
+        {/* Drawer */}
+        <SideDrawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          onCreateBudget={handleCreateBudget}
+          activeView={view}
+          onNavigate={setView}
+          user={user}
+          onLogout={handleLogout}
+        />
 
-        <NewExpenseModal open={expenseModalOpen} onClose={() => setExpenseModalOpen(false)}
-          budgets={budgets} onAdd={handleAddExpense} />
+        {/* Modals */}
+        <NewExpenseModal
+          open={expenseModalOpen}
+          onClose={() => setExpenseModalOpen(false)}
+          budgets={budgets}
+          onAdd={handleAddExpense}
+        />
 
-        <EditExpenseModal open={editingExpense !== null} onClose={() => setEditingExpense(null)}
-          expense={editingExpense} budgets={budgets} onUpdate={handleUpdateExpense} />
+        <EditExpenseModal
+          open={editingExpense !== null}
+          onClose={() => setEditingExpense(null)}
+          expense={editingExpense}
+          budgets={budgets}
+          onUpdate={handleUpdateExpense}
+        />
 
-        <ConfirmModal open={deletingExpense !== null} onClose={() => setDeletingExpense(null)}
+        <ConfirmModal
+          open={deletingExpense !== null}
+          onClose={() => setDeletingExpense(null)}
           onConfirm={() => deletingExpense && handleDeleteExpense(deletingExpense)}
           title="Excluir Despesa"
           message={`Tem certeza que deseja excluir "${deletingExpense?.name}"? Esta ação não pode ser desfeita.`}
-          confirmLabel="Excluir" danger />
+          confirmLabel="Excluir"
+          danger
+        />
 
         <Toast toast={toast} onDismiss={() => setToast(null)} />
       </div>
