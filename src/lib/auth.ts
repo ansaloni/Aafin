@@ -90,3 +90,36 @@ export function getSession(): User | null {
     return null;
   }
 }
+
+export function updateProfile(
+  uid: string,
+  name: string
+): { user: User } | { error: string } {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Nome é obrigatório" };
+  const users = getUsers();
+  const idx = users.findIndex((u) => u.id === uid);
+  if (idx === -1) return { error: "Usuário não encontrado" };
+  users[idx].name = trimmed;
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  const session: User = { id: users[idx].id, name: trimmed, email: users[idx].email };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  return { user: session };
+}
+
+export function changePassword(
+  uid: string,
+  currentPassword: string,
+  newPassword: string
+): true | { error: string } {
+  const users = getUsers();
+  const idx = users.findIndex((u) => u.id === uid);
+  if (idx === -1) return { error: "Usuário não encontrado" };
+  if (users[idx].password !== hashPassword(currentPassword))
+    return { error: "Senha atual incorreta" };
+  if (newPassword.length < 6)
+    return { error: "A nova senha deve ter pelo menos 6 caracteres" };
+  users[idx].password = hashPassword(newPassword);
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  return true;
+}
