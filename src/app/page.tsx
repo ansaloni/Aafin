@@ -130,6 +130,10 @@ export default function App() {
     setView("home");
   }
 
+  function handleUpdateUser(updated: User) {
+    setUser(updated);
+  }
+
   function handleDeleteAccount() {
     if (!user) return;
     authDeleteAccount(user.id);
@@ -463,6 +467,7 @@ export default function App() {
           user={user}
           onLogout={handleLogout}
           onDeleteAccount={() => setDeleteAccountOpen(true)}
+          onUpdateUser={handleUpdateUser}
         />
 
         {/* Expense modals */}
