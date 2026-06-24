@@ -13,9 +13,14 @@ import {
   Pencil,
   Plus,
   ChevronLeft,
+  UserCircle,
+  Eye,
+  EyeOff,
+  Check,
 } from "lucide-react";
 import { Budget } from "@/lib/data";
 import type { User } from "@/lib/auth";
+import { updateProfile, changePassword } from "@/lib/auth";
 import { cn, formatCurrency, getProgressColor } from "@/lib/utils";
 
 export type AppView =
@@ -36,9 +41,52 @@ interface SideDrawerProps {
   user: User;
   onLogout: () => void;
   onDeleteAccount: () => void;
+  onUpdateUser: (user: User) => void;
 }
 
-type Section = "menu" | "budgets";
+type Section = "menu" | "budgets" | "profile";
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  error?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-zinc-600">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder ?? "••••••••"}
+          className={cn(
+            "flex h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 pr-9 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent",
+            error && "border-red-400 focus:ring-red-400"
+          )}
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+          tabIndex={-1}
+        >
+          {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+      {error && <p className="text-[10px] text-red-500">{error}</p>}
+    </div>
+  );
+}
 
 export function SideDrawer({
   open,
@@ -51,8 +99,19 @@ export function SideDrawer({
   user,
   onLogout,
   onDeleteAccount,
+  onUpdateUser,
 }: SideDrawerProps) {
   const [section, setSection] = useState<Section>("menu");
+
+  // Profile editing state
+  const [profileName, setProfileName] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [profileSuccess, setProfileSuccess] = useState(false);
+
+  // Password change state
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState(false);
 
   function handleClose() {
     setSection("menu");
@@ -62,6 +121,47 @@ export function SideDrawer({
   function navigate(view: AppView) {
     handleClose();
     onNavigate(view);
+  }
+
+  function openProfile() {
+    setProfileName(user.name);
+    setProfileError("");
+    setProfileSuccess(false);
+    setPwForm({ current: "", next: "", confirm: "" });
+    setPwError("");
+    setPwSuccess(false);
+    setSection("profile");
+  }
+
+  function handleSaveName(e: React.FormEvent) {
+    e.preventDefault();
+    setProfileError("");
+    setProfileSuccess(false);
+    const result = updateProfile(user.id, profileName);
+    if ("error" in result) {
+      setProfileError(result.error);
+    } else {
+      onUpdateUser(result.user);
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 2000);
+    }
+  }
+
+  function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError("");
+    setPwSuccess(false);
+    if (!pwForm.current) { setPwError("Informe a senha atual"); return; }
+    if (pwForm.next.length < 6) { setPwError("A nova senha deve ter pelo menos 6 caracteres"); return; }
+    if (pwForm.next !== pwForm.confirm) { setPwError("As senhas não coincidem"); return; }
+    const result = changePassword(user.id, pwForm.current, pwForm.next);
+    if (result !== true) {
+      setPwError(result.error);
+    } else {
+      setPwForm({ current: "", next: "", confirm: "" });
+      setPwSuccess(true);
+      setTimeout(() => setPwSuccess(false), 2000);
+    }
   }
 
   const userInitials = user.name
@@ -98,7 +198,7 @@ export function SideDrawer({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          {section === "menu" ? (
+          {section === "menu" && (
             <div className="py-3">
               {/* Navigation */}
               <div className="px-3 mb-3">
@@ -187,8 +287,9 @@ export function SideDrawer({
                 )}
               </div>
             </div>
-          ) : (
-            /* Budget management section */
+          )}
+
+          {section === "budgets" && (
             <div className="py-3">
               <div className="px-3 mb-3 flex items-center gap-2">
                 <button
@@ -265,23 +366,132 @@ export function SideDrawer({
               </div>
             </div>
           )}
+
+          {section === "profile" && (
+            <div className="py-3">
+              <div className="px-3 mb-4 flex items-center gap-2">
+                <button
+                  onClick={() => setSection("menu")}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm font-semibold text-zinc-900">
+                  Meu Perfil
+                </span>
+              </div>
+
+              {/* Avatar */}
+              <div className="flex flex-col items-center gap-2 mb-5">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-100">
+                  <span className="text-xl font-bold text-indigo-700">
+                    {userInitials}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400">{user.email}</p>
+              </div>
+
+              {/* Name form */}
+              <div className="px-4">
+                <form onSubmit={handleSaveName} className="flex flex-col gap-3 mb-5">
+                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Nome
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      value={profileName}
+                      onChange={(e) => {
+                        setProfileName(e.target.value);
+                        setProfileError("");
+                        setProfileSuccess(false);
+                      }}
+                      placeholder="Seu nome"
+                      className="flex h-10 flex-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    <button
+                      type="submit"
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                    >
+                      {profileSuccess ? <Check className="h-4 w-4" /> : <Pencil className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  {profileError && (
+                    <p className="text-[10px] text-red-500">{profileError}</p>
+                  )}
+                  {profileSuccess && (
+                    <p className="text-[10px] text-green-600 font-medium">Nome atualizado!</p>
+                  )}
+                </form>
+
+                <div className="h-px bg-zinc-100 mb-4" />
+
+                {/* Password form */}
+                <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
+                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                    Alterar Senha
+                  </p>
+                  <PasswordField
+                    label="Senha atual"
+                    value={pwForm.current}
+                    onChange={(v) => { setPwForm((p) => ({ ...p, current: v })); setPwError(""); setPwSuccess(false); }}
+                  />
+                  <PasswordField
+                    label="Nova senha"
+                    value={pwForm.next}
+                    onChange={(v) => { setPwForm((p) => ({ ...p, next: v })); setPwError(""); setPwSuccess(false); }}
+                  />
+                  <PasswordField
+                    label="Confirmar nova senha"
+                    value={pwForm.confirm}
+                    onChange={(v) => { setPwForm((p) => ({ ...p, confirm: v })); setPwError(""); setPwSuccess(false); }}
+                  />
+                  {pwError && (
+                    <p className="text-[10px] text-red-500">{pwError}</p>
+                  )}
+                  {pwSuccess && (
+                    <p className="text-[10px] text-green-600 font-medium">Senha alterada com sucesso!</p>
+                  )}
+                  <button
+                    type="submit"
+                    className="flex h-10 w-full items-center justify-center rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors"
+                  >
+                    Salvar nova senha
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* User footer */}
         <div className="border-t border-zinc-100 p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-100">
+            <button
+              onClick={openProfile}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-100 hover:bg-indigo-200 transition-colors"
+              title="Editar perfil"
+            >
               <span className="text-xs font-bold text-indigo-700">
                 {userInitials}
               </span>
-            </div>
-            <div className="flex-1 min-w-0">
+            </button>
+            <button
+              onClick={openProfile}
+              className="flex-1 min-w-0 text-left"
+            >
               <p className="text-sm font-semibold text-zinc-900 truncate">
                 {user.name}
               </p>
               <p className="text-xs text-zinc-400 truncate">{user.email}</p>
-            </div>
+            </button>
             <div className="flex items-center gap-1">
+              <button
+                onClick={openProfile}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 transition-colors"
+                title="Editar perfil"
+              >
+                <UserCircle className="h-4 w-4" />
+              </button>
               <button
                 onClick={onDeleteAccount}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-500 transition-colors"
