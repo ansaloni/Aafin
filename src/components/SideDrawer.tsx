@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Budget } from "@/lib/data";
 import type { User } from "@/lib/auth";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, getProgressColor } from "@/lib/utils";
 
 export type AppView =
   | "home"
@@ -221,13 +221,24 @@ export function SideDrawer({
                       style={{ backgroundColor: budget.color }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-800 truncate">
-                        {budget.name}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-zinc-800 truncate">
+                          {budget.name}
+                        </p>
+                        <span className="text-[10px] text-zinc-400 bg-zinc-100 rounded px-1 flex-shrink-0">
+                          {budget.period}
+                        </span>
+                      </div>
                       <p className="text-xs text-zinc-400">
                         {formatCurrency(budget.spent)} /{" "}
                         {formatCurrency(budget.limit)}
                       </p>
+                      <div className="mt-1 h-1 w-full bg-zinc-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${getProgressColor(Math.min((budget.spent / budget.limit) * 100, 100))}`}
+                          style={{ width: `${Math.min((budget.spent / budget.limit) * 100, 100)}%` }}
+                        />
+                      </div>
                     </div>
                     <button
                       onClick={() => {

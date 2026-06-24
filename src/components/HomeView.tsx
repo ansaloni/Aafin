@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Budget, Expense } from "@/lib/data";
+import { Budget, BudgetPeriod, Expense } from "@/lib/data";
 import { BudgetCard } from "@/components/BudgetCard";
 import { formatCurrency, cn } from "@/lib/utils";
 import { TrendingDown, TrendingUp, Wallet } from "lucide-react";
@@ -22,6 +22,99 @@ const PERIODS: { value: HomePeriod; label: string }[] = [
   { value: "year", label: "Ano" },
 ];
 
+function getDaysInMonth(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+function budgetPeriodDays(period: BudgetPeriod, ref: Date): number {
+  if (period === "Diário") return 1;
+  if (period === "Semanal") return 7;
+  if (period === "Mensal") return getDaysInMonth(ref);
+  return 365; // Anual
+}
+
+function viewPeriodDays(period: HomePeriod, ref: Date): number {
+  if (period === "day") return 1;
+  if (period === "week") return 7;
+  if (period === "month") return getDaysInMonth(ref);
+  return 365;
+}
+
+function periodsMatch(budgetPeriod: BudgetPeriod, viewPeriod: HomePeriod): boolean {
+  return (
+    (budgetPeriod === "Diário" && viewPeriod === "day") ||
+    (budgetPeriod === "Semanal" && viewPeriod === "week") ||
+    (budgetPeriod === "Mensal" && viewPeriod === "month") ||
+    (budgetPeriod === "Anual" && viewPeriod === "year")
+  );
+}
+
+function periodBoundaryStart(date: Date, period: BudgetPeriod): Date {
+  if (period === "Diário") {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (period === "Semanal") {
+    const d = new Date(date);
+    d.setDate(d.getDate() - d.getDay()); // Sunday
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (period === "Mensal") {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
+  return new Date(date.getFullYear(), 0, 1); // Anual
+}
+
+function nextPeriodBoundary(start: Date, period: BudgetPeriod): Date {
+  if (period === "Diário") {
+    const d = new Date(start);
+    d.setDate(d.getDate() + 1);
+    return d;
+  }
+  if (period === "Semanal") {
+    const d = new Date(start);
+    d.setDate(d.getDate() + 7);
+    return d;
+  }
+  if (period === "Mensal") {
+    return new Date(start.getFullYear(), start.getMonth() + 1, 1);
+  }
+  return new Date(start.getFullYear() + 1, 0, 1); // Anual
+}
+
+function computeRollover(
+  budget: Budget,
+  allExpenses: Expense[],
+  currentPeriodStart: Date
+): number {
+  const budgetExpenses = allExpenses.filter((e) => e.budgetId === budget.id);
+  const startStr =
+    budget.createdAt ??
+    (budgetExpenses.length > 0
+      ? budgetExpenses.reduce(
+          (m, e) => (e.date < m ? e.date : m),
+          budgetExpenses[0].date
+        )
+      : null);
+  if (!startStr) return 0;
+
+  let cursor = periodBoundaryStart(new Date(startStr), budget.period);
+  let rollover = 0;
+
+  while (cursor < currentPeriodStart) {
+    const next = nextPeriodBoundary(cursor, budget.period);
+    const spent = budgetExpenses
+      .filter((e) => e.date >= cursor.toISOString() && e.date < next.toISOString())
+      .reduce((s, e) => s + e.value, 0);
+    rollover += budget.limit - spent;
+    cursor = next;
+  }
+
+  return rollover;
+}
+
 function getPeriodStart(period: HomePeriod): string {
   const now = new Date();
   if (period === "day") {
@@ -31,8 +124,7 @@ function getPeriodStart(period: HomePeriod): string {
   }
   if (period === "week") {
     const from = new Date(now);
-    const day = from.getDay();
-    from.setDate(from.getDate() - (day === 0 ? 6 : day - 1));
+    from.setDate(from.getDate() - from.getDay()); // Sunday
     from.setHours(0, 0, 0, 0);
     return from.toISOString();
   }
@@ -52,24 +144,32 @@ export function HomeView({
 
   const periodStart = useMemo(() => getPeriodStart(period), [period]);
 
-  const periodExpenses = useMemo(
-    () => expenses.filter((e) => e.date >= periodStart),
-    [expenses, periodStart]
-  );
+  const budgetsWithPeriodSpent = useMemo(() => {
+    const now = new Date();
+    const currentPeriodStart = new Date(periodStart);
+    return budgets.map((b) => {
+      const periodSpent = expenses
+        .filter((e) => e.budgetId === b.id && e.date >= periodStart)
+        .reduce((s, e) => s + e.value, 0);
 
-  const budgetsWithPeriodSpent = useMemo(
-    () =>
-      budgets.map((b) => ({
-        ...b,
-        spent: periodExpenses
-          .filter((e) => e.budgetId === b.id)
-          .reduce((s, e) => s + e.value, 0),
-      })),
-    [budgets, periodExpenses]
-  );
+      let effectiveLimit: number;
+      if (periodsMatch(b.period, period)) {
+        const rollover = b.cumulative
+          ? computeRollover(b, expenses, currentPeriodStart)
+          : 0;
+        effectiveLimit = b.limit + rollover;
+      } else {
+        effectiveLimit =
+          b.limit *
+          (viewPeriodDays(period, now) / budgetPeriodDays(b.period, now));
+      }
+
+      return { ...b, spent: periodSpent, limit: effectiveLimit };
+    });
+  }, [budgets, expenses, period, periodStart]);
 
   const totalSpent = budgetsWithPeriodSpent.reduce((s, b) => s + b.spent, 0);
-  const totalLimit = budgets.reduce((s, b) => s + b.limit, 0);
+  const totalLimit = budgetsWithPeriodSpent.reduce((s, b) => s + b.limit, 0);
   const totalRemaining = totalLimit - totalSpent;
   const overallPercent = totalLimit > 0 ? (totalSpent / totalLimit) * 100 : 0;
 
@@ -153,7 +253,7 @@ export function HomeView({
               Nenhum orçamento criado
             </p>
             <p className="text-xs text-zinc-400">
-              Abra o menu e crie seu primeiro orçamento
+              Abra o menu para criar seu primeiro orçamento
             </p>
           </div>
         ) : (
@@ -162,9 +262,7 @@ export function HomeView({
               <BudgetCard
                 key={budget.id}
                 budget={budget}
-                onClick={
-                  onBudgetClick ? () => onBudgetClick(budget.id) : undefined
-                }
+                onClick={onBudgetClick ? () => onBudgetClick(budget.id) : undefined}
               />
             ))}
           </div>

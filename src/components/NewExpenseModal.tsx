@@ -36,7 +36,8 @@ export function NewExpenseModal({ open, onClose, budgets, onAdd }: NewExpenseMod
   function validate() {
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = "Nome é obrigatório";
-    if (!form.value || isNaN(Number(form.value)) || Number(form.value) <= 0)
+    const numVal = parseFloat(form.value.replace(",", "."));
+    if (!form.value || isNaN(numVal) || numVal <= 0)
       errs.value = "Insira um valor válido";
     if (!form.budgetId) errs.budgetId = "Selecione um orçamento";
     if (!form.date) errs.date = "Data é obrigatória";
@@ -53,7 +54,7 @@ export function NewExpenseModal({ open, onClose, budgets, onAdd }: NewExpenseMod
     const budget = budgets.find((b) => b.id === form.budgetId);
     onAdd({
       name: form.name.trim(),
-      value: Number(form.value),
+      value: parseFloat(form.value.replace(",", ".")),
       budgetId: form.budgetId,
       budgetName: budget?.name ?? "",
       note: form.note.trim(),
@@ -83,11 +84,9 @@ export function NewExpenseModal({ open, onClose, budgets, onAdd }: NewExpenseMod
 
         <Input
           label="Valor (R$)"
-          type="number"
+          type="text"
           inputMode="decimal"
           placeholder="0,00"
-          min="0.01"
-          step="0.01"
           value={form.value}
           onChange={(e) => handleChange("value", e.target.value)}
           error={errors.value}

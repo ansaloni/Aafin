@@ -20,13 +20,14 @@ const PERIODS: { value: Period; label: string }[] = [
   { value: "all", label: "Tudo" },
 ];
 
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
 function getPeriodStart(period: Period): string | null {
   if (period === "all") return null;
   const now = new Date();
   if (period === "week") {
     const from = new Date(now);
-    const day = from.getDay();
-    from.setDate(from.getDate() - (day === 0 ? 6 : day - 1));
+    from.setDate(from.getDate() - from.getDay()); // Sunday
     from.setHours(0, 0, 0, 0);
     return from.toISOString();
   }
@@ -77,6 +78,8 @@ export function AnalysisView({
     return Object.values(map).sort((a, b) => b.value - a.value);
   }, [filtered, budgets]);
 
+  const maxBudgetSpent = Math.max(...byBudget.map((b) => b.value), 1);
+
   const timeData = useMemo(() => {
     const now = new Date();
     if (period === "year") {
@@ -87,24 +90,23 @@ export function AnalysisView({
           .filter((e) => e.date.slice(0, 7) === monthStr)
           .reduce((s, e) => s + e.value, 0);
         return {
-          label: d
-            .toLocaleString("pt-BR", { month: "short" })
-            .replace(".", ""),
+          label: d.toLocaleString("pt-BR", { month: "short" }).replace(".", ""),
           value,
         };
       });
     }
-    const days = period === "week" ? 7 : 30;
-    return Array.from({ length: days }, (_, i) => {
+
+    // Week and month both show last 7 days
+    return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now);
-      d.setDate(d.getDate() - (days - 1 - i));
+      d.setDate(d.getDate() - (6 - i));
       const dateStr = d.toISOString().slice(0, 10);
-      const isToday = i === days - 1;
+      const isToday = i === 6;
       const label = isToday
         ? "Hoje"
-        : days <= 7
-        ? d.toLocaleString("pt-BR", { weekday: "short" }).replace(".", "")
-        : String(d.getDate());
+        : period === "week"
+        ? WEEKDAYS[d.getDay()]
+        : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
       const value = filtered
         .filter((e) => e.date.slice(0, 10) === dateStr)
         .reduce((s, e) => s + e.value, 0);
@@ -112,9 +114,15 @@ export function AnalysisView({
     });
   }, [filtered, period]);
 
-  const chartData = period === "month" ? timeData.slice(-14) : timeData;
-  const maxValue = Math.max(...chartData.map((d) => d.value), 1);
+  const maxValue = Math.max(...timeData.map((d) => d.value), 1);
   const topExpenses = [...filtered].sort((a, b) => b.value - a.value).slice(0, 5);
+
+  const chartTitle =
+    period === "year"
+      ? "Gasto por Mês"
+      : period === "week"
+      ? "Esta Semana"
+      : "Últimos 7 dias";
 
   return (
     <div className="flex flex-col gap-5">
@@ -188,36 +196,93 @@ export function AnalysisView({
         </p>
       </div>
 
-      {/* Bar chart */}
-      {chartData.some((d) => d.value > 0) && (
+      {/* Budget comparison chart */}
+      {byBudget.length > 1 && !budgetFilter && (
         <div className="bg-white rounded-2xl p-4 border border-zinc-100">
           <h3 className="text-sm font-bold text-zinc-900 mb-3">
-            {period === "year"
-              ? "Gasto por Mês"
-              : period === "week"
-              ? "Esta Semana"
-              : "Últimos 14 dias"}
+            Comparativo por Orçamento
           </h3>
-          <div className="flex items-end gap-1" style={{ height: "88px" }}>
-            {chartData.map((d, i) => (
+          <div className="flex items-end gap-2" style={{ height: "110px" }}>
+            {byBudget.map((item) => {
+              const budget = budgets.find((b) => b.id === item.id);
+              const heightPct =
+                maxBudgetSpent > 0
+                  ? (item.value / maxBudgetSpent) * 100
+                  : 0;
+              const limitPct =
+                budget && maxBudgetSpent > 0
+                  ? Math.min((budget.limit / maxBudgetSpent) * 100, 100)
+                  : 100;
+              return (
+                <div
+                  key={item.id}
+                  className="flex flex-col items-center gap-1 flex-1 min-w-0"
+                >
+                  <div
+                    className="relative w-full flex items-end justify-center"
+                    style={{ height: "76px" }}
+                  >
+                    {/* Limit ghost bar */}
+                    {budget && (
+                      <div
+                        className="absolute bottom-0 w-full max-w-[28px] rounded-t"
+                        style={{
+                          height: `${limitPct}%`,
+                          backgroundColor: item.color,
+                          opacity: 0.15,
+                        }}
+                      />
+                    )}
+                    {/* Spent bar */}
+                    <div
+                      className="relative w-full max-w-[28px] rounded-t transition-all duration-500"
+                      style={{
+                        height: `${heightPct}%`,
+                        backgroundColor: item.color,
+                        minHeight: item.value > 0 ? "3px" : "0",
+                      }}
+                    />
+                  </div>
+                  <span className="text-[9px] text-zinc-500 truncate w-full text-center leading-tight">
+                    {item.name.split(" ")[0]}
+                  </span>
+                  <span
+                    className="text-[9px] font-bold leading-none"
+                    style={{ color: item.color }}
+                  >
+                    {formatCurrency(item.value)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Time-series bar chart */}
+      {timeData.some((d) => d.value > 0) && (
+        <div className="bg-white rounded-2xl p-4 border border-zinc-100">
+          <h3 className="text-sm font-bold text-zinc-900 mb-3">{chartTitle}</h3>
+          <div className="flex items-end gap-1" style={{ height: "120px" }}>
+            {timeData.map((d, i) => (
               <div
                 key={i}
                 className="flex flex-col items-center gap-1 flex-1 min-w-0"
               >
                 <div
                   className="w-full flex items-end justify-center"
-                  style={{ height: "68px" }}
+                  style={{ height: "90px" }}
                 >
                   <div
-                    className="w-full max-w-[20px] rounded-t bg-indigo-500 transition-all"
+                    className="w-full max-w-[28px] rounded-t bg-indigo-500 transition-all"
                     style={{
                       height: `${(d.value / maxValue) * 100}%`,
-                      minHeight: d.value > 0 ? "2px" : "0",
-                      opacity: d.value > 0 ? 1 : 0.12,
+                      minHeight: d.value > 0 ? "3px" : "0",
+                      opacity: d.value > 0 ? 1 : 0.1,
                     }}
                   />
                 </div>
-                <span className="text-[8px] text-zinc-400 truncate w-full text-center leading-none">
+                <span className="text-[9px] text-zinc-400 truncate w-full text-center leading-none">
                   {d.label}
                 </span>
               </div>
@@ -226,7 +291,7 @@ export function AnalysisView({
         </div>
       )}
 
-      {/* By budget */}
+      {/* By budget (proportion breakdown) */}
       {byBudget.length > 0 && (
         <div className="bg-white rounded-2xl p-4 border border-zinc-100">
           <h3 className="text-sm font-bold text-zinc-900 mb-3">

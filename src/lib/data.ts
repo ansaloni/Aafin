@@ -8,6 +8,7 @@ export interface Budget {
   period: BudgetPeriod;
   cumulative: boolean;
   color: string;
+  createdAt?: string;
 }
 
 export interface Expense {

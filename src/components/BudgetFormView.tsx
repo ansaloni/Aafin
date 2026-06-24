@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Check } from "lucide-react";
 import { Budget, BudgetPeriod, BUDGET_COLORS } from "@/lib/data";
+import { BudgetCard } from "@/components/BudgetCard";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -43,7 +45,10 @@ export function BudgetFormView({
     if (mode === "edit" && budget) {
       setForm({
         name: budget.name,
-        limit: String(budget.limit),
+        limit: budget.limit.toLocaleString("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
         period: budget.period,
         cumulative: budget.cumulative,
         color: budget.color,
@@ -54,10 +59,12 @@ export function BudgetFormView({
     setErrors({});
   }, [mode, budget]);
 
+  const parsedLimit = parseFloat(form.limit.replace(",", "."));
+
   function validate() {
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = "Nome é obrigatório";
-    if (!form.limit || isNaN(Number(form.limit)) || Number(form.limit) <= 0)
+    if (!form.limit || isNaN(parsedLimit) || parsedLimit <= 0)
       errs.limit = "Insira um valor válido";
     return errs;
   }
@@ -71,15 +78,37 @@ export function BudgetFormView({
     }
     onSubmit({
       name: form.name.trim(),
-      limit: Number(form.limit),
+      limit: parsedLimit,
       period: form.period,
       cumulative: form.cumulative,
       color: form.color,
+      createdAt:
+        mode === "create"
+          ? new Date().toISOString()
+          : (budget?.createdAt ?? undefined),
     });
   }
 
+  const previewBudget: Budget = {
+    id: "preview",
+    name: form.name || "Nome do orçamento",
+    limit: isNaN(parsedLimit) || parsedLimit <= 0 ? 0 : parsedLimit,
+    spent: 0,
+    period: form.period,
+    cumulative: form.cumulative,
+    color: form.color,
+  };
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {/* Live preview */}
+      <div>
+        <p className="text-xs font-medium text-zinc-400 mb-2">Pré-visualização</p>
+        <div className="pointer-events-none">
+          <BudgetCard budget={previewBudget} />
+        </div>
+      </div>
+
       <Input
         label="Nome do Orçamento"
         placeholder="Ex: Alimentação, Lazer..."
@@ -94,11 +123,9 @@ export function BudgetFormView({
 
       <Input
         label="Valor Limite (R$)"
-        type="number"
+        type="text"
         inputMode="decimal"
         placeholder="0,00"
-        min="0.01"
-        step="0.01"
         value={form.limit}
         onChange={(e) => {
           setForm((p) => ({ ...p, limit: e.target.value }));
@@ -116,22 +143,34 @@ export function BudgetFormView({
         }
       />
 
+      {/* Section divider */}
+      <div className="flex items-center gap-2">
+        <div className="h-px flex-1 bg-zinc-100" />
+        <span className="text-xs text-zinc-400 font-medium">Aparência</span>
+        <div className="h-px flex-1 bg-zinc-100" />
+      </div>
+
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-zinc-700">Cor</label>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-3 flex-wrap">
           {BUDGET_COLORS.map((color) => (
             <button
               key={color}
               type="button"
               onClick={() => setForm((p) => ({ ...p, color }))}
               className={cn(
-                "h-7 w-7 rounded-full transition-all",
-                form.color === color
-                  ? "ring-2 ring-offset-2 ring-zinc-900 scale-110"
-                  : "hover:scale-105"
+                "h-9 w-9 rounded-full flex items-center justify-center transition-transform hover:scale-105",
+                form.color === color ? "scale-110" : ""
               )}
               style={{ backgroundColor: color }}
-            />
+            >
+              {form.color === color && (
+                <Check
+                  className="h-4 w-4 text-white"
+                  style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.4))" }}
+                />
+              )}
+            </button>
           ))}
         </div>
       </div>
